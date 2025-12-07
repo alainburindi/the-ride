@@ -7,18 +7,23 @@ services:
       PORT: 3000
       WS_PORT: 3001
       JWT_SECRET: dev_secret
+      JWT_EXPIRATION: 7d
       REDIS_URL: redis://redis:6379
       OSRM_URL: http://osrm:5000
-      DATABASE_URL: postgres://user:pass@postgres:5432/ride
+      DATABASE_URL: postgresql://user:pass@postgres:5432/ride
     ports:
       - '3000:3000'
       - '3001:3001'
     depends_on:
-      - redis
-      - osrm
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      osrm:
+        condition: service_started
     networks:
       - ride-network
+    restart: unless-stopped
 
   redis:
     image: redis:7

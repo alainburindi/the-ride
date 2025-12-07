@@ -28,8 +28,9 @@ FROM node:24-alpine AS production
 
 WORKDIR /app
 
-# Install yarn
-RUN corepack enable && corepack prepare yarn@stable --activate
+# Install yarn and curl for healthcheck
+RUN corepack enable && corepack prepare yarn@stable --activate && \
+    apk add --no-cache curl
 
 # Copy package files and install production dependencies
 COPY package.json yarn.lock ./
@@ -43,17 +44,20 @@ RUN yarn prisma generate
 # Copy built application
 COPY --from=builder /app/dist ./dist
 
+# Copy startup script
+COPY docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
+
 # Set environment variables
 ENV NODE_ENV=production
 
 # Expose ports
 EXPOSE 3000 3001
 
-# Health check using curl (more reliable in alpine)
-RUN apk add --no-cache curl
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
   CMD curl -f http://localhost:3000/health || exit 1
 
-# Start the application
-CMD ["node", "dist/main"]
+# Start the application with migrations
+ENTRYPOINT ["./docker-entrypoint.sh"]
 

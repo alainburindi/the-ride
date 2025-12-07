@@ -67,8 +67,23 @@ docker run --rm -v "$(pwd)":/data osrm/osrm-backend osrm-customize /data/rwanda-
 
 ### 2. Start Services
 
+#### Option A: Run Everything in Docker (Recommended for Production)
+
 ```bash
-# Start infrastructure (Redis, PostgreSQL, OSRM)
+cd infra
+docker compose up -d
+```
+
+This will start all services:
+- **PostgreSQL** - Database with PostGIS extension
+- **Redis** - For GEO queries and caching
+- **OSRM** - Route calculation engine
+- **Backend** - NestJS API (auto-runs migrations on startup)
+
+#### Option B: Development Mode (Local Backend)
+
+```bash
+# Start infrastructure only
 cd infra
 docker compose up -d redis postgres osrm
 
@@ -80,7 +95,10 @@ yarn install
 yarn prisma generate
 yarn prisma migrate dev
 
-# Start backend
+# Seed database with test data (optional)
+yarn prisma db seed
+
+# Start backend in dev mode
 yarn start:dev
 ```
 
