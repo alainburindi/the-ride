@@ -11,9 +11,11 @@ export interface User {
   driverId?: string;
 }
 
+// Backend response structure
 export interface AuthResponse {
-  accessToken: string;
-  user: User;
+  access_token: string;
+  role: 'RIDER' | 'DRIVER' | 'ADMIN';
+  userId: string;
 }
 
 export interface LoginDto {
@@ -65,7 +67,7 @@ export class AuthService {
 
   login(dto: LoginDto): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/login`, dto).pipe(
-      tap((response) => this.handleAuthSuccess(response)),
+      tap((response) => this.handleAuthSuccess(response, dto.email)),
       catchError((error) => {
         console.error('Login failed:', error);
         return throwError(() => error);
@@ -75,7 +77,7 @@ export class AuthService {
 
   register(dto: RegisterDto): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(`${environment.apiUrl}/auth/register`, dto).pipe(
-      tap((response) => this.handleAuthSuccess(response)),
+      tap((response) => this.handleAuthSuccess(response, dto.email)),
       catchError((error) => {
         console.error('Registration failed:', error);
         return throwError(() => error);
@@ -89,10 +91,15 @@ export class AuthService {
     this.router.navigate(['/auth/login']);
   }
 
-  private handleAuthSuccess(response: AuthResponse): void {
-    localStorage.setItem(this.TOKEN_KEY, response.accessToken);
-    localStorage.setItem(this.USER_KEY, JSON.stringify(response.user));
-    this._currentUser.set(response.user);
+  private handleAuthSuccess(response: AuthResponse, email: string): void {
+    const user: User = {
+      id: response.userId,
+      email: email,
+      role: response.role,
+    };
+    localStorage.setItem(this.TOKEN_KEY, response.access_token);
+    localStorage.setItem(this.USER_KEY, JSON.stringify(user));
+    this._currentUser.set(user);
   }
 
   private clearStorage(): void {

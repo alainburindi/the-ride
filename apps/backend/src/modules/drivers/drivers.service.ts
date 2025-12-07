@@ -103,25 +103,37 @@ export class DriversService {
     });
   }
 
-  async updateStatus(id: string, userId: string, dto: UpdateDriverStatusDto) {
-    // Verify ownership
+  async updateStatusByUserId(userId: string, dto: UpdateDriverStatusDto) {
     const driver = await this.prisma.driver.findUnique({
-      where: { id },
+      where: { userId },
     });
 
     if (!driver) {
-      throw new NotFoundException(`Driver with ID ${id} not found`);
+      throw new NotFoundException(`Driver for user ${userId} not found`);
     }
 
-    if (driver.userId !== userId) {
-      throw new ForbiddenException(
-        'You can only update your own driver status'
-      );
+    return this.updateDriverStatus(driver.id, dto);
+  }
+
+  async updateStatusById(driverId: string, dto: UpdateDriverStatusDto) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+    });
+
+    if (!driver) {
+      throw new NotFoundException(`Driver with ID ${driverId} not found`);
     }
 
+    return this.updateDriverStatus(driverId, dto);
+  }
+
+  private async updateDriverStatus(
+    driverId: string,
+    dto: UpdateDriverStatusDto
+  ) {
     // Update database status
     const updatedDriver = await this.prisma.driver.update({
-      where: { id },
+      where: { id: driverId },
       data: {
         status: dto.status,
       },
@@ -129,10 +141,10 @@ export class DriversService {
 
     // Update Redis presence based on status
     if (dto.status === DriverStatus.ONLINE) {
-      await this.redis.setDriverOnline(id);
+      await this.redis.setDriverOnline(driverId);
     } else if (dto.status === DriverStatus.OFFLINE) {
-      await this.redis.setDriverOffline(id);
-      await this.redis.geoRemoveDriver(id);
+      await this.redis.setDriverOffline(driverId);
+      await this.redis.geoRemoveDriver(driverId);
     }
     // BUSY status keeps online presence but doesn't remove from geo
 

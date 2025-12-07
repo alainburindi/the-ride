@@ -46,6 +46,16 @@ export class DriversController {
     return this.driversService.findByUserId(userId);
   }
 
+  @Patch('me/status')
+  @Roles(UserRole.DRIVER)
+  @ApiOperation({ summary: 'Update current driver status (online/offline)' })
+  async updateMyStatus(
+    @CurrentUser('userId') userId: string,
+    @Body() dto: UpdateDriverStatusDto
+  ) {
+    return this.driversService.updateStatusByUserId(userId, dto);
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.driversService.findOne(id);
@@ -56,22 +66,22 @@ export class DriversController {
   async update(
     @Param('id') id: string,
     @CurrentUser('userId') userId: string,
-    @Body() dto: UpdateDriverDto,
+    @Body() dto: UpdateDriverDto
   ) {
     return this.driversService.update(id, userId, dto);
   }
 
-  @Patch(':id/status')
-  @Roles(UserRole.DRIVER)
-  async updateStatus(
-    @Param('id') id: string,
-    @CurrentUser('userId') userId: string,
-    @Body() dto: UpdateDriverStatusDto,
-  ) {
-    return this.driversService.updateStatus(id, userId, dto);
-  }
-
   // ==================== Admin Endpoints ====================
+
+  @Patch(':id/status')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Update any driver status (Admin only)' })
+  async updateDriverStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateDriverStatusDto
+  ) {
+    return this.driversService.updateStatusById(id, dto);
+  }
 
   @Get('admin/pending')
   @Roles(UserRole.ADMIN)
@@ -96,9 +106,8 @@ export class DriversController {
   async updateApprovalStatus(
     @Param('id') id: string,
     @CurrentUser('userId') adminUserId: string,
-    @Body() dto: ApproveDriverDto,
+    @Body() dto: ApproveDriverDto
   ) {
     return this.driversService.updateApprovalStatus(id, adminUserId, dto);
   }
 }
-

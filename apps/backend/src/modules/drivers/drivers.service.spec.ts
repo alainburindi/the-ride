@@ -84,21 +84,19 @@ describe('DriversService', () => {
     });
   });
 
-  describe('updateStatus', () => {
+  describe('updateStatusById', () => {
     const driverId = 'driver-123';
-    const userId = 'user-123';
 
     it('should update driver status to ONLINE', async () => {
       mockPrismaService.driver.findUnique.mockResolvedValue({
         id: driverId,
-        userId,
       });
       mockPrismaService.driver.update.mockResolvedValue({
         id: driverId,
         status: DriverStatus.ONLINE,
       });
 
-      await service.updateStatus(driverId, userId, {
+      await service.updateStatusById(driverId, {
         status: DriverStatus.ONLINE,
       });
 
@@ -108,14 +106,13 @@ describe('DriversService', () => {
     it('should update driver status to OFFLINE and remove from geo', async () => {
       mockPrismaService.driver.findUnique.mockResolvedValue({
         id: driverId,
-        userId,
       });
       mockPrismaService.driver.update.mockResolvedValue({
         id: driverId,
         status: DriverStatus.OFFLINE,
       });
 
-      await service.updateStatus(driverId, userId, {
+      await service.updateStatusById(driverId, {
         status: DriverStatus.OFFLINE,
       });
 
@@ -123,15 +120,12 @@ describe('DriversService', () => {
       expect(mockRedisService.geoRemoveDriver).toHaveBeenCalledWith(driverId);
     });
 
-    it('should throw ForbiddenException when updating other driver', async () => {
-      mockPrismaService.driver.findUnique.mockResolvedValue({
-        id: driverId,
-        userId: 'different-user',
-      });
+    it('should throw NotFoundException for non-existent driver', async () => {
+      mockPrismaService.driver.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.updateStatus(driverId, userId, { status: DriverStatus.ONLINE })
-      ).rejects.toThrow(ForbiddenException);
+        service.updateStatusById('non-existent', { status: DriverStatus.ONLINE })
+      ).rejects.toThrow(NotFoundException);
     });
   });
 
