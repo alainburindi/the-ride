@@ -114,44 +114,47 @@ See `apps/backend/README.md` for detailed API documentation and example requests
 - **WebSocket** for real-time communication
 - **PostgreSQL + PostGIS** for trip persistence
 
-## Horizontal Scaling
+## Scaling Considerations
 
-The system is designed to support horizontal scaling with multiple backend instances:
+### Current State (Single Instance)
 
-### Redis-Based State Management
+Since this is a **prototype/test project**, the current implementation is designed for **single-instance deployment**. Some state is intentionally stored in-memory for simplicity:
 
-All transient state is stored in Redis instead of in-memory Maps, enabling multiple backend instances to share state:
+| Component | Current Storage | Notes |
+|-----------|-----------------|-------|
+| Pending ride requests | In-memory Map | Lost on restart |
+| Driver socket mappings | In-memory Map | Instance-specific |
+| Rider socket mappings | In-memory Map | Instance-specific |
+| Driver locations | **Redis GEO** ✅ | Shared across instances |
+| Driver presence | **Redis Keys + TTL** ✅ | Shared across instances |
 
-| Component | Storage | Purpose |
-|-----------|---------|---------|
-| Pending ride requests | Redis Hash | Track active matching sessions |
-| Driver socket mappings | Redis Hash | Map driverId to socketId across instances |
-| Rider socket mappings | Redis Hash | Map riderId to socketId across instances |
-| Driver locations | Redis GEO | Spatial queries for nearby drivers |
-| Driver presence | Redis Keys + TTL | Online/offline status with auto-expiration |
+### Future: Horizontal Scaling
 
-### WebSocket Scaling with Redis Adapter
+To support multiple backend instances, these changes would be needed:
 
-For WebSocket horizontal scaling, the system uses `@socket.io/redis-adapter`:
-
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  Backend 1  │     │  Backend 2  │     │  Backend 3  │
-│  (Socket.io)│     │  (Socket.io)│     │  (Socket.io)│
-└──────┬──────┘     └──────┬──────┘     └──────┬──────┘
-       │                   │                   │
-       └───────────────────┼───────────────────┘
-                           │
-                    ┌──────▼──────┐
-                    │    Redis    │
-                    │  (Pub/Sub)  │
-                    └─────────────┘
+**1. Move pending requests to Redis:**
+```typescript
+// Instead of: private pendingRequests = new Map()
+// Use: Redis Hash for pending request state
+await redis.hset('pending:requests', requestId, JSON.stringify(pendingRequest));
 ```
 
-This allows:
+**2. Add Socket.io Redis Adapter:**
+```typescript
+import { createAdapter } from '@socket.io/redis-adapter';
+io.adapter(createAdapter(pubClient, subClient));
+```
+
+**3. Store socket mappings in Redis:**
+```typescript
+// Map driverId -> socketId in Redis instead of in-memory
+await redis.hset('sockets:drivers', driverId, socketId);
+```
+
+This would enable:
 - Any backend instance to send messages to any connected client
 - Ride offers to reach drivers regardless of which instance they're connected to
-- Seamless failover if an instance goes down
+- State persistence across restarts
 
 ### Future Scaling Options
 
