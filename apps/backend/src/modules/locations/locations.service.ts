@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { RedisService, GeoMember } from '../../common/redis/redis.service';
 
 export interface LocationUpdate {
@@ -8,37 +9,94 @@ export interface LocationUpdate {
   ts: number;
 }
 
+export interface LocationUpdateResult {
+  updated: boolean;
+  reason?: 'throttled' | 'invalid_coordinates';
+  distanceMoved?: number;
+}
+
 @Injectable()
 export class LocationsService {
   private readonly logger = new Logger(LocationsService.name);
 
-  constructor(private readonly redis: RedisService) {}
+  // Throttling: minimum distance (meters) before updating location
+  private readonly minDistanceThresholdM: number;
+
+  constructor(
+    private readonly redis: RedisService,
+    private readonly configService: ConfigService
+  ) {
+    this.minDistanceThresholdM = this.configService.get<number>(
+      'LOCATION_MIN_DISTANCE_M',
+      10 // Default: 10 meters
+    );
+  }
 
   /**
-   * Update driver location in Redis GEO set and refresh presence
+   * Update driver location with throttling and batched Redis operations
+   * Only updates if driver moved more than MIN_DISTANCE_THRESHOLD_M meters
    */
-  async updateDriverLocation(update: LocationUpdate): Promise<void> {
+  async updateDriverLocation(
+    update: LocationUpdate
+  ): Promise<LocationUpdateResult> {
     const { driverId, lat, lon, ts } = update;
 
-    // Validate coordinates (Rwanda approximate bounds)
+    // Validate coordinates
     if (!this.isValidCoordinate(lat, lon)) {
       this.logger.warn(
-        `Invalid coordinates for driver ${driverId}: ${lat}, ${lon}`,
+        `Invalid coordinates for driver ${driverId}: ${lat}, ${lon}`
+      );
+      return { updated: false, reason: 'invalid_coordinates' };
+    }
+
+    // Throttling: check if driver moved enough distance
+    const lastPosition = await this.redis.getDriverLastPosition(driverId);
+
+    if (lastPosition) {
+      const distanceMoved = this.calculateDistance(
+        lastPosition.lat,
+        lastPosition.lon,
+        lat,
+        lon
+      );
+
+      if (distanceMoved < this.minDistanceThresholdM) {
+        // Still refresh presence TTL even if not updating position
+        await this.redis.setDriverOnline(driverId);
+
+        this.logger.debug(
+          `Throttled location update for driver ${driverId}: moved only ${distanceMoved.toFixed(1)}m`
+        );
+        return { updated: false, reason: 'throttled', distanceMoved };
+      }
+    }
+
+    // Use batched pipeline for atomic update (single round-trip)
+    await this.redis.batchUpdateDriverLocation(driverId, lon, lat, ts);
+
+    this.logger.debug(
+      `Updated location for driver ${driverId}: ${lat}, ${lon}`
+    );
+    return { updated: true };
+  }
+
+  /**
+   * Force update driver location (bypasses throttling)
+   * Useful for initial location set or when accuracy is critical
+   */
+  async forceUpdateDriverLocation(update: LocationUpdate): Promise<void> {
+    const { driverId, lat, lon, ts } = update;
+
+    if (!this.isValidCoordinate(lat, lon)) {
+      this.logger.warn(
+        `Invalid coordinates for driver ${driverId}: ${lat}, ${lon}`
       );
       return;
     }
 
-    // Update GEO position
-    await this.redis.geoAddDriver(driverId, lon, lat);
-
-    // Refresh online presence TTL
-    await this.redis.setDriverOnline(driverId);
-
-    // Store last known position with timestamp
-    await this.redis.setDriverLastPosition(driverId, lon, lat, ts);
-
+    await this.redis.batchUpdateDriverLocation(driverId, lon, lat, ts);
     this.logger.debug(
-      `Updated location for driver ${driverId}: ${lat}, ${lon}`,
+      `Force updated location for driver ${driverId}: ${lat}, ${lon}`
     );
   }
 
@@ -49,13 +107,13 @@ export class LocationsService {
     lat: number,
     lon: number,
     radiusMeters: number = 5000,
-    count: number = 10,
+    count: number = 10
   ): Promise<GeoMember[]> {
     const candidates = await this.redis.geoSearchNearbyDrivers(
       lon,
       lat,
       radiusMeters,
-      count,
+      count
     );
 
     // Filter to only include drivers that are actually online
@@ -103,5 +161,33 @@ export class LocationsService {
 
     return true;
   }
-}
 
+  /**
+   * Calculate distance between two coordinates using Haversine formula
+   * Returns distance in meters
+   */
+  private calculateDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number
+  ): number {
+    const EARTH_RADIUS_M = 6371000; // Earth's radius in meters
+
+    const toRadians = (degrees: number) => degrees * (Math.PI / 180);
+
+    const dLat = toRadians(lat2 - lat1);
+    const dLon = toRadians(lon2 - lon1);
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRadians(lat1)) *
+        Math.cos(toRadians(lat2)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return EARTH_RADIUS_M * c;
+  }
+}

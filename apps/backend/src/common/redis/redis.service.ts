@@ -27,7 +27,7 @@ export class RedisService implements OnModuleDestroy {
   constructor(private readonly configService: ConfigService) {
     const redisUrl = this.configService.get<string>(
       'REDIS_URL',
-      'redis://localhost:6379',
+      'redis://localhost:6379'
     );
     this.client = new Redis(redisUrl);
   }
@@ -48,7 +48,7 @@ export class RedisService implements OnModuleDestroy {
   async geoAddDriver(
     driverId: string,
     lon: number,
-    lat: number,
+    lat: number
   ): Promise<number> {
     return this.client.geoadd(RedisService.DRIVERS_GEO_KEY, lon, lat, driverId);
   }
@@ -66,7 +66,7 @@ export class RedisService implements OnModuleDestroy {
   async geoGetDriverPosition(driverId: string): Promise<GeoPosition | null> {
     const positions = await this.client.geopos(
       RedisService.DRIVERS_GEO_KEY,
-      driverId,
+      driverId
     );
     if (positions && positions[0]) {
       const [lon, lat] = positions[0];
@@ -86,7 +86,7 @@ export class RedisService implements OnModuleDestroy {
     lon: number,
     lat: number,
     radiusMeters: number,
-    count: number = 10,
+    count: number = 10
   ): Promise<GeoMember[]> {
     // Using GEOSEARCH with FROMLONLAT, BYRADIUS, ASC, COUNT, WITHDIST, WITHCOORD
     const results = await this.client.call(
@@ -102,7 +102,7 @@ export class RedisService implements OnModuleDestroy {
       'COUNT',
       count.toString(),
       'WITHDIST',
-      'WITHCOORD',
+      'WITHCOORD'
     );
 
     if (!results || !Array.isArray(results)) {
@@ -160,14 +160,14 @@ export class RedisService implements OnModuleDestroy {
     driverId: string,
     lon: number,
     lat: number,
-    timestamp: number,
+    timestamp: number
   ): Promise<void> {
     const key = `${RedisService.DRIVER_ONLINE_PREFIX}${driverId}${RedisService.DRIVER_LASTPOS_SUFFIX}`;
     await this.client.set(
       key,
       JSON.stringify({ lon, lat, ts: timestamp }),
       'EX',
-      RedisService.PRESENCE_TTL_SEC * 2, // Keep last position a bit longer
+      RedisService.PRESENCE_TTL_SEC * 2 // Keep last position a bit longer
     );
   }
 
@@ -175,7 +175,7 @@ export class RedisService implements OnModuleDestroy {
    * Get last known position for a driver
    */
   async getDriverLastPosition(
-    driverId: string,
+    driverId: string
   ): Promise<{ lon: number; lat: number; ts: number } | null> {
     const key = `${RedisService.DRIVER_ONLINE_PREFIX}${driverId}${RedisService.DRIVER_LASTPOS_SUFFIX}`;
     const data = await this.client.get(key);
@@ -183,6 +183,41 @@ export class RedisService implements OnModuleDestroy {
       return JSON.parse(data);
     }
     return null;
+  }
+
+  // ==================== Batched Operations ====================
+
+  /**
+   * Update driver location using Redis pipeline for atomic batch execution
+   * Combines: GEOADD + SETEX (online) + SET (lastpos) in single round-trip
+   */
+  async batchUpdateDriverLocation(
+    driverId: string,
+    lon: number,
+    lat: number,
+    timestamp: number
+  ): Promise<void> {
+    const onlineKey = `${RedisService.DRIVER_ONLINE_PREFIX}${driverId}${RedisService.DRIVER_ONLINE_SUFFIX}`;
+    const lastPosKey = `${RedisService.DRIVER_ONLINE_PREFIX}${driverId}${RedisService.DRIVER_LASTPOS_SUFFIX}`;
+    const lastPosValue = JSON.stringify({ lon, lat, ts: timestamp });
+
+    const pipeline = this.client.pipeline();
+
+    // Add to GEO set
+    pipeline.geoadd(RedisService.DRIVERS_GEO_KEY, lon, lat, driverId);
+
+    // Refresh online presence TTL
+    pipeline.setex(onlineKey, RedisService.PRESENCE_TTL_SEC, '1');
+
+    // Store last position
+    pipeline.set(
+      lastPosKey,
+      lastPosValue,
+      'EX',
+      RedisService.PRESENCE_TTL_SEC * 2
+    );
+
+    await pipeline.exec();
   }
 
   // ==================== Generic Operations ====================
@@ -203,4 +238,3 @@ export class RedisService implements OnModuleDestroy {
     return this.client.del(key);
   }
 }
-
