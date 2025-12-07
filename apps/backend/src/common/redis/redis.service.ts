@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
@@ -15,6 +15,7 @@ export interface GeoMember {
 
 @Injectable()
 export class RedisService implements OnModuleDestroy {
+  private readonly logger = new Logger(RedisService.name);
   private readonly client: Redis;
 
   // Redis key constants
@@ -217,7 +218,20 @@ export class RedisService implements OnModuleDestroy {
       RedisService.PRESENCE_TTL_SEC * 2
     );
 
-    await pipeline.exec();
+    const results = await pipeline.exec();
+
+    // ioredis pipeline returns [[error, result], ...] for each command
+    // Check if any command failed and throw to match sequential behavior
+    if (results) {
+      for (const [err] of results) {
+        if (err) {
+          this.logger.error(
+            `Redis pipeline error for driver ${driverId}: ${err.message}`
+          );
+          throw err;
+        }
+      }
+    }
   }
 
   // ==================== Generic Operations ====================
