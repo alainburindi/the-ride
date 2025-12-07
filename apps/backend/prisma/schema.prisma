@@ -1,0 +1,108 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  RIDER
+  DRIVER
+}
+
+enum DriverStatus {
+  ONLINE
+  OFFLINE
+  BUSY
+}
+
+enum TripState {
+  MATCHING
+  ASSIGNED
+  EN_ROUTE
+  ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+}
+
+enum RideRequestStatus {
+  PENDING
+  MATCHING
+  MATCHED
+  EXPIRED
+  CANCELED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  driver       Driver?
+  rideRequests RideRequest[]
+  tripsAsRider Trip[]        @relation("RiderTrips")
+
+  @@map("users")
+}
+
+model Driver {
+  id          String       @id @default(uuid())
+  userId      String       @unique @map("user_id")
+  vehicleInfo Json?        @map("vehicle_info")
+  status      DriverStatus @default(OFFLINE)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trips Trip[] @relation("DriverTrips")
+
+  @@map("drivers")
+}
+
+model RideRequest {
+  id             String            @id @default(uuid())
+  riderId        String            @map("rider_id")
+  originLat      Float             @map("origin_lat")
+  originLon      Float             @map("origin_lon")
+  destinationLat Float             @map("destination_lat")
+  destinationLon Float             @map("destination_lon")
+  status         RideRequestStatus @default(PENDING)
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  rider User  @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  trip  Trip?
+
+  @@map("ride_requests")
+}
+
+model Trip {
+  id             String    @id @default(uuid())
+  rideRequestId  String    @unique @map("ride_request_id")
+  riderId        String    @map("rider_id")
+  driverId       String    @map("driver_id")
+  originLat      Float     @map("origin_lat")
+  originLon      Float     @map("origin_lon")
+  destinationLat Float     @map("destination_lat")
+  destinationLon Float     @map("destination_lon")
+  state          TripState @default(ASSIGNED)
+  pickupEtaSec   Int?      @map("pickup_eta_sec")
+  tripEtaSec     Int?      @map("trip_eta_sec")
+  distanceMeters Int?      @map("distance_meters")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  completedAt    DateTime? @map("completed_at")
+
+  rideRequest RideRequest @relation(fields: [rideRequestId], references: [id])
+  rider       User        @relation("RiderTrips", fields: [riderId], references: [id])
+  driver      Driver      @relation("DriverTrips", fields: [driverId], references: [id])
+
+  @@map("trips")
+}
+

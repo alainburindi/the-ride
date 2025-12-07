@@ -1,0 +1,22 @@
+# OSRM Rwanda Data Directory
+
+Place preprocessed Rwanda OSRM files here:
+- rwanda.osrm
+- rwanda.osrm.cells
+- rwanda.osrm.mldgr
+- rwanda.osrm.level
+- etc.
+
+## How to prepare:
+
+1. Download Rwanda PBF from Geofabrik:
+   wget https://download.geofabrik.de/africa/rwanda-latest.osm.pbf
+
+2. Preprocess with OSRM:
+   docker run --rm -v "$(pwd)":/data osrm/osrm-backend osrm-extract -p /opt/car.lua /data/rwanda-latest.osm.pbf
+   docker run --rm -v "$(pwd)":/data osrm/osrm-backend osrm-partition /data/rwanda-latest.osrm
+   docker run --rm -v "$(pwd)":/data osrm/osrm-backend osrm-customize /data/rwanda-latest.osrm
+
+3. Rename output file (if needed):
+   mv rwanda-latest.osrm rwanda.osrm
+
