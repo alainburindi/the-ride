@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AuthModule } from './modules/auth/auth.module';
 import { DriversModule } from './modules/drivers/drivers.module';
 import { LocationsModule } from './modules/locations/locations.module';
@@ -18,6 +20,24 @@ import { HealthModule } from './health/health.module';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => [
+        {
+          // Short burst limit: 10 requests per second
+          name: 'short',
+          ttl: config.get<number>('THROTTLE_SHORT_TTL', 1000),
+          limit: config.get<number>('THROTTLE_SHORT_LIMIT', 10),
+        },
+        {
+          // Medium limit: 100 requests per minute
+          name: 'medium',
+          ttl: config.get<number>('THROTTLE_MEDIUM_TTL', 60000),
+          limit: config.get<number>('THROTTLE_MEDIUM_LIMIT', 100),
+        },
+      ],
+    }),
     PrismaModule,
     RedisModule,
     OsrmModule,
@@ -30,6 +50,11 @@ import { HealthModule } from './health/health.module';
     RidesModule,
     WsModule,
   ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}
-

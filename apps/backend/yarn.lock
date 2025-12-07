@@ -304,6 +304,11 @@
     jsonc-parser "3.3.1"
     pluralize "8.0.0"
 
+"@nestjs/throttler@^6.5.0":
+  version "6.5.0"
+  resolved "https://registry.yarnpkg.com/@nestjs/throttler/-/throttler-6.5.0.tgz#1ee550a258c4ae697d3978f2c8932adff927439e"
+  integrity sha512-9j0ZRfH0QE1qyrj9JjIRDz5gQLPqq9yVC2nHsrosDVAfI5HHw08/aUAWx9DZLSdQf4HDkmhTTEGLrRFHENvchQ==
+
 "@nestjs/websockets@^10.3.0":
   version "10.4.20"
   resolved "https://registry.yarnpkg.com/@nestjs/websockets/-/websockets-10.4.20.tgz#3a9b7ba00a8d7fb335b7ca5ba22ab16d5e2eda1b"

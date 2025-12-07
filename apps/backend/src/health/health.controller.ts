@@ -1,12 +1,14 @@
 import { Controller, Get } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { OsrmService } from '../common/osrm/osrm.service';
 import { RedisService } from '../common/redis/redis.service';
 
 @Controller('health')
+@SkipThrottle()
 export class HealthController {
   constructor(
     private readonly osrmService: OsrmService,
-    private readonly redis: RedisService,
+    private readonly redis: RedisService
   ) {}
 
   @Get()
@@ -54,4 +56,3 @@ export class HealthController {
     }
   }
 }
-
