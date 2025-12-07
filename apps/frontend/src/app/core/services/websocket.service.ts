@@ -64,7 +64,7 @@ export class WebSocketService {
       return;
     }
 
-    this.socket = io(environment.wsUrl, {
+    this.socket = io(`${environment.wsUrl}/ws`, {
       auth: { token },
       transports: ['websocket'],
     });
@@ -119,15 +119,15 @@ export class WebSocketService {
 
   // Driver methods
   acceptRide(rideRequestId: string): void {
-    this.socket?.emit('ride:accept', { rideRequestId });
+    this.socket?.emit('driver.accept', { requestId: rideRequestId });
   }
 
   rejectRide(rideRequestId: string): void {
-    this.socket?.emit('ride:reject', { rideRequestId });
+    this.socket?.emit('driver.decline', { requestId: rideRequestId });
   }
 
   updateLocation(lat: number, lon: number): void {
-    this.socket?.emit('location:update', { lat, lon, ts: Date.now() });
+    this.socket?.emit('driver.location', { lat, lon, ts: Date.now() });
   }
 
   // Trip updates
