@@ -36,7 +36,7 @@ export class OsrmService {
   constructor(private readonly configService: ConfigService) {
     this.baseUrl = this.configService.get<string>(
       'OSRM_URL',
-      'http://localhost:5000',
+      'http://localhost:5050'
     );
   }
 
@@ -70,19 +70,21 @@ export class OsrmService {
 
       if (!response.ok) {
         this.logger.error(
-          `OSRM route failed with status ${response.status}: ${response.statusText}`,
+          `OSRM route failed with status ${response.status}: ${response.statusText}`
         );
         throw new ServiceUnavailableException(
-          'OSRM routing service unavailable',
+          'OSRM routing service unavailable'
         );
       }
 
       const json: OsrmRouteResponse = await response.json();
 
       if (json.code !== 'Ok') {
-        this.logger.warn(`OSRM returned code: ${json.code}, message: ${json.message}`);
+        this.logger.warn(
+          `OSRM returned code: ${json.code}, message: ${json.message}`
+        );
         throw new ServiceUnavailableException(
-          `OSRM routing failed: ${json.message || json.code}`,
+          `OSRM routing failed: ${json.message || json.code}`
         );
       }
 
@@ -101,9 +103,7 @@ export class OsrmService {
       }
 
       this.logger.error(`OSRM request failed: ${error}`);
-      throw new ServiceUnavailableException(
-        'OSRM routing service unavailable',
-      );
+      throw new ServiceUnavailableException('OSRM routing service unavailable');
     }
   }
 
@@ -112,7 +112,7 @@ export class OsrmService {
    */
   async getPickupEta(
     driverLocation: Coordinates,
-    pickupLocation: Coordinates,
+    pickupLocation: Coordinates
   ): Promise<RouteResult> {
     return this.getRoute([driverLocation, pickupLocation]);
   }
@@ -122,7 +122,7 @@ export class OsrmService {
    */
   async getTripEta(
     pickupLocation: Coordinates,
-    destination: Coordinates,
+    destination: Coordinates
   ): Promise<RouteResult> {
     return this.getRoute([pickupLocation, destination]);
   }
@@ -134,7 +134,7 @@ export class OsrmService {
   async getFullRouteEta(
     driverLocation: Coordinates,
     pickupLocation: Coordinates,
-    destination: Coordinates,
+    destination: Coordinates
   ): Promise<{
     pickup: RouteResult;
     trip: RouteResult;
@@ -156,7 +156,7 @@ export class OsrmService {
       // Use a simple route in Kigali, Rwanda for health check
       const testCoords: Coordinates[] = [
         { lon: 30.0619, lat: -1.9444 }, // Kigali center
-        { lon: 30.0650, lat: -1.9500 }, // Nearby point
+        { lon: 30.065, lat: -1.95 }, // Nearby point
       ];
       await this.getRoute(testCoords);
       return true;
@@ -165,4 +165,3 @@ export class OsrmService {
     }
   }
 }
-

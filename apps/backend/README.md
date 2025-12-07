@@ -120,7 +120,7 @@ Connect to `ws://localhost:3001/ws?token=<JWT>`
 | JWT_SECRET | JWT signing secret | dev_secret |
 | JWT_EXPIRATION | Token expiration | 1h |
 | REDIS_URL | Redis connection URL | redis://localhost:6379 |
-| OSRM_URL | OSRM service URL | http://localhost:5000 |
+| OSRM_URL | OSRM service URL | http://localhost:5050 |
 | DATABASE_URL | PostgreSQL connection | postgres://user:pass@localhost:5432/ride |
 
 ## Example Flow

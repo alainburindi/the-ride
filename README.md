@@ -48,19 +48,21 @@ the-ride/
 
 ### 1. Prepare OSRM Data
 
+> **Note:** This is a one-time setup step. OSRM map processing is CPU-intensive and takes 10-30 minutes, which is why it's done separately rather than in Docker startup.
+
 ```bash
 cd infra/osrm
 
 # Download Rwanda PBF from Geofabrik
 wget https://download.geofabrik.de/africa/rwanda-latest.osm.pbf
+# Or use curl if wget is not installed:
+# curl -L -o rwanda-latest.osm.pbf https://download.geofabrik.de/africa/rwanda-latest.osm.pbf
 
 # Preprocess with OSRM (MLD algorithm)
 docker run --rm -v "$(pwd)":/data osrm/osrm-backend osrm-extract -p /opt/car.lua /data/rwanda-latest.osm.pbf
 docker run --rm -v "$(pwd)":/data osrm/osrm-backend osrm-partition /data/rwanda-latest.osrm
 docker run --rm -v "$(pwd)":/data osrm/osrm-backend osrm-customize /data/rwanda-latest.osrm
 
-# Rename for docker-compose
-mv rwanda-latest.osrm rwanda.osrm
 ```
 
 ### 2. Start Services
