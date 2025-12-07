@@ -10,6 +10,13 @@ datasource db {
 enum UserRole {
   RIDER
   DRIVER
+  ADMIN
+}
+
+enum DriverApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum DriverStatus {
@@ -44,23 +51,29 @@ model User {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  driver       Driver?
-  rideRequests RideRequest[]
-  tripsAsRider Trip[]        @relation("RiderTrips")
+  driver          Driver?
+  approvedDrivers Driver[]      @relation("DriverApprovals")
+  rideRequests    RideRequest[]
+  tripsAsRider    Trip[]        @relation("RiderTrips")
 
   @@map("users")
 }
 
 model Driver {
-  id          String       @id @default(uuid())
-  userId      String       @unique @map("user_id")
-  vehicleInfo Json?        @map("vehicle_info")
-  status      DriverStatus @default(OFFLINE)
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
+  id             String               @id @default(uuid())
+  userId         String               @unique @map("user_id")
+  vehicleInfo    Json?                @map("vehicle_info")
+  status         DriverStatus         @default(OFFLINE)
+  approvalStatus DriverApprovalStatus @default(PENDING) @map("approval_status")
+  approvedBy     String?              @map("approved_by")
+  approvedAt     DateTime?            @map("approved_at")
+  rejectionNote  String?              @map("rejection_note")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
 
-  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  trips Trip[] @relation("DriverTrips")
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  approver User?  @relation("DriverApprovals", fields: [approvedBy], references: [id])
+  trips    Trip[] @relation("DriverTrips")
 
   @@map("drivers")
 }
@@ -105,4 +118,3 @@ model Trip {
 
   @@map("trips")
 }
-

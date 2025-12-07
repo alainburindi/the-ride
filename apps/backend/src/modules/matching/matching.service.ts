@@ -11,7 +11,7 @@ import {
 } from '../../common/osrm/osrm.service';
 import { RedisService, GeoMember } from '../../common/redis/redis.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { DriverStatus } from '@prisma/client';
+import { DriverStatus, DriverApprovalStatus } from '@prisma/client';
 
 export interface MatchCandidate {
   driverId: string;
@@ -149,7 +149,7 @@ export class MatchingService {
   }
 
   /**
-   * Filter drivers to only include those with ONLINE status
+   * Filter drivers to only include those with ONLINE status and APPROVED
    * Uses a single batch query instead of N+1 sequential queries
    */
   private async filterAvailableDrivers(
@@ -161,18 +161,19 @@ export class MatchingService {
 
     const driverIds = drivers.map((d) => d.memberId);
 
-    // Single batch query to get all online drivers
-    const onlineDrivers = await this.prisma.driver.findMany({
+    // Single batch query to get all online and approved drivers
+    const availableDrivers = await this.prisma.driver.findMany({
       where: {
         id: { in: driverIds },
         status: DriverStatus.ONLINE,
+        approvalStatus: DriverApprovalStatus.APPROVED,
       },
       select: { id: true },
     });
 
-    const onlineDriverIds = new Set(onlineDrivers.map((d) => d.id));
+    const availableDriverIds = new Set(availableDrivers.map((d) => d.id));
 
-    return drivers.filter((d) => onlineDriverIds.has(d.memberId));
+    return drivers.filter((d) => availableDriverIds.has(d.memberId));
   }
 
   /**
