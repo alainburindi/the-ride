@@ -2,18 +2,20 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { RedisService } from '../../common/redis/redis.service';
-import { DriverStatus, Prisma } from '@prisma/client';
+import { DriverStatus, DriverApprovalStatus, Prisma } from '@prisma/client';
 import { UpdateDriverDto } from './dto/update-driver.dto';
 import { UpdateDriverStatusDto } from './dto/update-driver-status.dto';
+import { ApproveDriverDto } from './dto/approve-driver.dto';
 
 @Injectable()
 export class DriversService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
+    private readonly redis: RedisService
   ) {}
 
   async findAll() {
@@ -88,7 +90,9 @@ export class DriversService {
     }
 
     if (driver.userId !== userId) {
-      throw new ForbiddenException('You can only update your own driver profile');
+      throw new ForbiddenException(
+        'You can only update your own driver profile'
+      );
     }
 
     return this.prisma.driver.update({
@@ -110,7 +114,9 @@ export class DriversService {
     }
 
     if (driver.userId !== userId) {
-      throw new ForbiddenException('You can only update your own driver status');
+      throw new ForbiddenException(
+        'You can only update your own driver status'
+      );
     }
 
     // Update database status
@@ -162,7 +168,7 @@ export class DriversService {
           isOnline,
           lastPosition,
         };
-      }),
+      })
     );
 
     return enrichedDrivers.filter((d) => d.isOnline);
@@ -181,5 +187,127 @@ export class DriversService {
       data: { status: DriverStatus.ONLINE },
     });
   }
-}
 
+  // ==================== Admin Operations ====================
+
+  /**
+   * Get all drivers pending approval (Admin only)
+   */
+  async findPendingApproval() {
+    return this.prisma.driver.findMany({
+      where: {
+        approvalStatus: DriverApprovalStatus.PENDING,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            createdAt: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+  }
+
+  /**
+   * Get drivers by approval status (Admin only)
+   */
+  async findByApprovalStatus(status: DriverApprovalStatus) {
+    return this.prisma.driver.findMany({
+      where: {
+        approvalStatus: status,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+        approver: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    });
+  }
+
+  /**
+   * Approve or reject a driver (Admin only)
+   */
+  async updateApprovalStatus(
+    driverId: string,
+    adminUserId: string,
+    dto: ApproveDriverDto
+  ) {
+    const driver = await this.prisma.driver.findUnique({
+      where: { id: driverId },
+    });
+
+    if (!driver) {
+      throw new NotFoundException(`Driver with ID ${driverId} not found`);
+    }
+
+    if (driver.approvalStatus !== DriverApprovalStatus.PENDING) {
+      throw new BadRequestException(
+        `Driver is already ${driver.approvalStatus.toLowerCase()}`
+      );
+    }
+
+    if (dto.status === DriverApprovalStatus.REJECTED && !dto.rejectionNote) {
+      throw new BadRequestException(
+        'Rejection note is required when rejecting a driver'
+      );
+    }
+
+    return this.prisma.driver.update({
+      where: { id: driverId },
+      data: {
+        approvalStatus: dto.status,
+        approvedBy: adminUserId,
+        approvedAt: new Date(),
+        rejectionNote:
+          dto.status === DriverApprovalStatus.REJECTED
+            ? dto.rejectionNote
+            : null,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Get driver approval statistics (Admin only)
+   */
+  async getApprovalStats() {
+    const [pending, approved, rejected, total] = await Promise.all([
+      this.prisma.driver.count({
+        where: { approvalStatus: DriverApprovalStatus.PENDING },
+      }),
+      this.prisma.driver.count({
+        where: { approvalStatus: DriverApprovalStatus.APPROVED },
+      }),
+      this.prisma.driver.count({
+        where: { approvalStatus: DriverApprovalStatus.REJECTED },
+      }),
+      this.prisma.driver.count(),
+    ]);
+
+    return { pending, approved, rejected, total };
+  }
+}

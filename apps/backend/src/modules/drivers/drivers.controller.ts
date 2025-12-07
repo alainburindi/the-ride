@@ -5,6 +5,7 @@ import {
   Param,
   Body,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { DriversService } from './drivers.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -13,7 +14,8 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UpdateDriverDto } from './dto/update-driver.dto';
 import { UpdateDriverStatusDto } from './dto/update-driver-status.dto';
-import { UserRole } from '@prisma/client';
+import { ApproveDriverDto } from './dto/approve-driver.dto';
+import { UserRole, DriverApprovalStatus } from '@prisma/client';
 
 @Controller('drivers')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -59,6 +61,36 @@ export class DriversController {
     @Body() dto: UpdateDriverStatusDto,
   ) {
     return this.driversService.updateStatus(id, userId, dto);
+  }
+
+  // ==================== Admin Endpoints ====================
+
+  @Get('admin/pending')
+  @Roles(UserRole.ADMIN)
+  async getPendingDrivers() {
+    return this.driversService.findPendingApproval();
+  }
+
+  @Get('admin/stats')
+  @Roles(UserRole.ADMIN)
+  async getApprovalStats() {
+    return this.driversService.getApprovalStats();
+  }
+
+  @Get('admin/by-status')
+  @Roles(UserRole.ADMIN)
+  async getDriversByStatus(@Query('status') status: DriverApprovalStatus) {
+    return this.driversService.findByApprovalStatus(status);
+  }
+
+  @Patch('admin/:id/approval')
+  @Roles(UserRole.ADMIN)
+  async updateApprovalStatus(
+    @Param('id') id: string,
+    @CurrentUser('userId') adminUserId: string,
+    @Body() dto: ApproveDriverDto,
+  ) {
+    return this.driversService.updateApprovalStatus(id, adminUserId, dto);
   }
 }
 
