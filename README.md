@@ -140,6 +140,28 @@ For millions of location updates per second, consider:
 - **Message Queue (Kafka/RabbitMQ)**: Async location processing pipeline
 - **Geohashing (H3/S2)**: Hierarchical spatial indexing
 
+### Future Resilience: Circuit Breaker for OSRM
+
+The OSRM service is critical for ETA calculations. To improve resilience, implement a circuit breaker pattern:
+
+```
+CLOSED (normal) ──[failures exceed threshold]──► OPEN (fail fast)
+                                                      │
+                                                [timeout]
+                                                      ▼
+                                              HALF-OPEN (test)
+                                                      │
+                                    success → CLOSED, failure → OPEN
+```
+
+Benefits:
+- **Fail fast**: Don't wait for OSRM timeout when service is down
+- **Graceful degradation**: Return cached ETAs or estimates
+- **Auto-recovery**: Automatically retry when OSRM recovers
+- **Resource protection**: Prevent cascading failures
+
+Implementation options: Custom lightweight implementation or `opossum` library.
+
 ## Acceptance Criteria
 
 - ✅ Driver onboarding works via REST
