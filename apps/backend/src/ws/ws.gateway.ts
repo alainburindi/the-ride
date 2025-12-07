@@ -9,11 +9,17 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  Logger,
+  UnauthorizedException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../modules/auth/auth.service';
 import { LocationsService } from '../modules/locations/locations.service';
 import { DriversService } from '../modules/drivers/drivers.service';
+import { RidesService } from '../modules/rides/rides.service';
 import { UserRole, DriverStatus } from '@prisma/client';
 
 // Message types
@@ -49,10 +55,17 @@ export interface DriverDeclineMessage {
 export interface RiderStatusMessage {
   type: 'rider.status';
   requestId: string;
-  status: 'matching' | 'matched' | 'no_drivers' | 'trip_started' | 'trip_completed';
+  status:
+    | 'matching'
+    | 'matched'
+    | 'no_drivers'
+    | 'driver_declined'
+    | 'trip_started'
+    | 'trip_completed';
   tripId?: string;
   driverId?: string;
   pickupEtaSec?: number;
+  message?: string;
 }
 
 interface AuthenticatedSocket extends Socket {
@@ -86,6 +99,8 @@ export class WsGateway
     private readonly authService: AuthService,
     private readonly locationsService: LocationsService,
     private readonly driversService: DriversService,
+    @Inject(forwardRef(() => RidesService))
+    private readonly ridesService: RidesService
   ) {}
 
   afterInit() {
@@ -96,7 +111,7 @@ export class WsGateway
     try {
       // Extract token from query or auth header
       const token =
-        client.handshake.query.token as string ||
+        (client.handshake.query.token as string) ||
         client.handshake.auth?.token ||
         client.handshake.headers.authorization?.replace('Bearer ', '');
 
@@ -161,7 +176,7 @@ export class WsGateway
   @SubscribeMessage('driver.location')
   async handleDriverLocation(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() data: DriverLocationMessage,
+    @MessageBody() data: DriverLocationMessage
   ) {
     if (client.user?.role !== UserRole.DRIVER) {
       return { error: 'Only drivers can send location updates' };
@@ -190,7 +205,7 @@ export class WsGateway
   @SubscribeMessage('driver.accept')
   async handleDriverAccept(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() data: DriverAcceptMessage,
+    @MessageBody() data: DriverAcceptMessage
   ) {
     if (client.user?.role !== UserRole.DRIVER) {
       return { error: 'Only drivers can accept rides' };
@@ -203,19 +218,19 @@ export class WsGateway
 
     this.logger.log(`Driver ${driverId} accepted request ${data.requestId}`);
 
-    // Emit event that will be handled by RidesModule
-    this.server.emit('internal:driver.accept', {
-      requestId: data.requestId,
-      driverId,
-    });
+    // Directly call RidesService to handle the accept
+    const result = await this.ridesService.handleDriverAccept(
+      data.requestId,
+      driverId
+    );
 
-    return { success: true, requestId: data.requestId };
+    return { success: true, requestId: data.requestId, tripId: result?.id };
   }
 
   @SubscribeMessage('driver.decline')
   async handleDriverDecline(
     @ConnectedSocket() client: AuthenticatedSocket,
-    @MessageBody() data: DriverDeclineMessage,
+    @MessageBody() data: DriverDeclineMessage
   ) {
     if (client.user?.role !== UserRole.DRIVER) {
       return { error: 'Only drivers can decline rides' };
@@ -228,11 +243,8 @@ export class WsGateway
 
     this.logger.log(`Driver ${driverId} declined request ${data.requestId}`);
 
-    // Emit event that will be handled by RidesModule
-    this.server.emit('internal:driver.decline', {
-      requestId: data.requestId,
-      driverId,
-    });
+    // Directly call RidesService to handle the decline
+    await this.ridesService.handleDriverDecline(data.requestId, driverId);
 
     return { success: true };
   }
@@ -292,4 +304,3 @@ export class WsGateway
     };
   }
 }
-

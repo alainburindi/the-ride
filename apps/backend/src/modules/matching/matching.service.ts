@@ -43,8 +43,8 @@ export class MatchingService {
   private readonly TRIP_WEIGHT = 0.3;
 
   // Default search parameters
-  private readonly DEFAULT_RADIUS_M = 5000; // 5km
-  private readonly MAX_RADIUS_M = 15000; // 15km
+  private readonly DEFAULT_RADIUS_M = 10000; // 10km (increased for demo)
+  private readonly MAX_RADIUS_M = 50000; // 50km (increased for demo)
   private readonly DEFAULT_MAX_CANDIDATES = 5;
 
   constructor(
@@ -80,17 +80,13 @@ export class MatchingService {
     );
 
     if (nearbyDrivers.length === 0) {
-      this.logger.debug('No nearby drivers found');
       return { candidates: [], bestMatch: null };
     }
-
-    this.logger.debug(`Found ${nearbyDrivers.length} nearby drivers`);
 
     // Step 2: Filter to only ONLINE drivers (not BUSY)
     const availableDrivers = await this.filterAvailableDrivers(nearbyDrivers);
 
     if (availableDrivers.length === 0) {
-      this.logger.debug('No available drivers (all busy or offline)');
       return { candidates: [], bestMatch: null };
     }
 
@@ -125,7 +121,6 @@ export class MatchingService {
     // If no matches, try expanding radius
     if (result.candidates.length === 0 && radiusMeters < this.MAX_RADIUS_M) {
       radiusMeters = Math.min(radiusMeters * 2, this.MAX_RADIUS_M);
-      this.logger.debug(`Expanding search radius to ${radiusMeters}m`);
       result = await this.findMatches({ ...request, radiusMeters });
     }
 

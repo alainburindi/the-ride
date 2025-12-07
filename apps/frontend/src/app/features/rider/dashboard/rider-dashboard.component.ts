@@ -288,7 +288,7 @@ export class RiderDashboardComponent implements OnInit, OnDestroy {
   state = signal<RideState>('idle');
   pickup = signal<{ lat: number; lon: number } | null>(null);
   dropoff = signal<{ lat: number; lon: number } | null>(null);
-  matchedDriver = signal<{ vehiclePlate?: string; eta?: number } | null>(null);
+  matchedDriver = signal<{ driverId?: string; vehiclePlate?: string; eta?: number } | null>(null);
   gettingLocation = signal(false);
 
   private subscriptions: Subscription[] = [];
@@ -302,14 +302,31 @@ export class RiderDashboardComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.wsService.connect();
 
-    // Listen for ride accepted
+    // Listen for rider status updates
     this.subscriptions.push(
-      this.wsService.rideAccepted$.subscribe((data) => {
-        this.matchedDriver.set({
-          vehiclePlate: data.vehiclePlate,
-          eta: data.eta,
-        });
-        this.state.set('matched');
+      this.wsService.riderStatus$.subscribe((data) => {
+        switch (data.status) {
+          case 'matching':
+            this.state.set('searching');
+            break;
+          case 'matched':
+            this.matchedDriver.set({
+              driverId: data.driverId,
+              eta: data.pickupEtaSec ? Math.round(data.pickupEtaSec / 60) : 5,
+            });
+            this.state.set('matched');
+            break;
+          case 'no_drivers':
+            alert('No drivers available. Please try again later.');
+            this.resetState();
+            break;
+          case 'trip_started':
+            this.state.set('in_trip');
+            break;
+          case 'trip_completed':
+            this.resetState();
+            break;
+        }
       })
     );
 

@@ -155,6 +155,14 @@ export class RedisService implements OnModuleDestroy {
   }
 
   /**
+   * Clear driver's last position (used when going offline)
+   */
+  async clearDriverLastPosition(driverId: string): Promise<void> {
+    const key = `${RedisService.DRIVER_ONLINE_PREFIX}${driverId}${RedisService.DRIVER_LASTPOS_SUFFIX}`;
+    await this.client.del(key);
+  }
+
+  /**
    * Store last known position for a driver
    */
   async setDriverLastPosition(

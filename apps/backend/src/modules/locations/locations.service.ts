@@ -49,10 +49,14 @@ export class LocationsService {
       return { updated: false, reason: 'invalid_coordinates' };
     }
 
-    // Throttling: check if driver moved enough distance
+    // Check if driver is in GEO set - if not, we MUST add them regardless of throttling
+    const isInGeoSet = await this.redis.geoGetDriverPosition(driverId);
+
+    // Throttling: check if driver moved enough distance (only if already in GEO set)
     const lastPosition = await this.redis.getDriverLastPosition(driverId);
 
-    if (lastPosition) {
+    if (lastPosition && isInGeoSet) {
+      // Only throttle if driver is already in GEO set
       const distanceMoved = this.calculateDistance(
         lastPosition.lat,
         lastPosition.lon,
@@ -74,9 +78,6 @@ export class LocationsService {
     // Use batched pipeline for atomic update (single round-trip)
     await this.redis.batchUpdateDriverLocation(driverId, lon, lat, ts);
 
-    this.logger.debug(
-      `Updated location for driver ${driverId}: ${lat}, ${lon}`
-    );
     return { updated: true };
   }
 
@@ -95,9 +96,6 @@ export class LocationsService {
     }
 
     await this.redis.batchUpdateDriverLocation(driverId, lon, lat, ts);
-    this.logger.debug(
-      `Force updated location for driver ${driverId}: ${lat}, ${lon}`
-    );
   }
 
   /**
@@ -136,12 +134,12 @@ export class LocationsService {
   }
 
   /**
-   * Remove driver from location tracking
+   * Remove driver from location tracking (cleans up all Redis keys)
    */
   async removeDriverLocation(driverId: string): Promise<void> {
     await this.redis.geoRemoveDriver(driverId);
     await this.redis.setDriverOffline(driverId);
-    this.logger.debug(`Removed location tracking for driver ${driverId}`);
+    await this.redis.clearDriverLastPosition(driverId);
   }
 
   /**

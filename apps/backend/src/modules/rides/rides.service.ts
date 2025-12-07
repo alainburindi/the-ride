@@ -9,7 +9,11 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { MatchingService, MatchCandidate } from '../matching/matching.service';
 import { TripsService } from '../trips/trips.service';
-import { WsGateway, DriverOfferMessage, RiderStatusMessage } from '../../ws/ws.gateway';
+import {
+  WsGateway,
+  DriverOfferMessage,
+  RiderStatusMessage,
+} from '../../ws/ws.gateway';
 import { RideRequestStatus } from '@prisma/client';
 import { CreateRideRequestDto } from './dto/create-ride-request.dto';
 
@@ -35,7 +39,7 @@ export class RidesService {
     private readonly matchingService: MatchingService,
     private readonly tripsService: TripsService,
     @Inject(forwardRef(() => WsGateway))
-    private readonly wsGateway: WsGateway,
+    private readonly wsGateway: WsGateway
   ) {}
 
   /**
@@ -54,10 +58,17 @@ export class RidesService {
       },
     });
 
-    this.logger.log(`Created ride request ${rideRequest.id} for rider ${riderId}`);
+    this.logger.log(
+      `Created ride request ${rideRequest.id} for rider ${riderId}`
+    );
 
     // Start matching process
-    await this.startMatching(rideRequest.id, riderId, dto.origin, dto.destination);
+    await this.startMatching(
+      rideRequest.id,
+      riderId,
+      dto.origin,
+      dto.destination
+    );
 
     return {
       requestId: rideRequest.id,
@@ -72,7 +83,7 @@ export class RidesService {
     requestId: string,
     riderId: string,
     origin: { lat: number; lon: number },
-    destination: { lat: number; lon: number },
+    destination: { lat: number; lon: number }
   ) {
     // Initialize pending request tracking
     const pendingRequest: PendingRequest = {
@@ -104,7 +115,10 @@ export class RidesService {
   /**
    * Send ride offer to a driver
    */
-  private async sendOfferToDriver(requestId: string, candidate: MatchCandidate) {
+  private async sendOfferToDriver(
+    requestId: string,
+    candidate: MatchCandidate
+  ) {
     const pendingRequest = this.pendingRequests.get(requestId);
     if (!pendingRequest) {
       return;
@@ -130,13 +144,17 @@ export class RidesService {
 
     if (!sent) {
       // Driver not connected, try next
-      this.logger.warn(`Driver ${candidate.driverId} not connected, trying next`);
+      this.logger.warn(
+        `Driver ${candidate.driverId} not connected, trying next`
+      );
       pendingRequest.declinedDrivers.push(candidate.driverId);
       await this.tryNextDriver(requestId);
       return;
     }
 
-    this.logger.log(`Sent offer to driver ${candidate.driverId} for request ${requestId}`);
+    this.logger.log(
+      `Sent offer to driver ${candidate.driverId} for request ${requestId}`
+    );
 
     // Set timeout for driver response
     pendingRequest.timeoutHandle = setTimeout(() => {
@@ -156,7 +174,9 @@ export class RidesService {
 
     // Verify it's the correct driver
     if (pendingRequest.currentDriver?.driverId !== driverId) {
-      this.logger.warn(`Driver ${driverId} cannot accept request ${requestId} - not the current offer recipient`);
+      this.logger.warn(
+        `Driver ${driverId} cannot accept request ${requestId} - not the current offer recipient`
+      );
       return null;
     }
 
@@ -221,6 +241,15 @@ export class RidesService {
 
     this.logger.log(`Driver ${driverId} declined request ${requestId}`);
 
+    // Notify rider that a driver declined and we're searching for another
+    const declinedStatus: RiderStatusMessage = {
+      type: 'rider.status',
+      requestId,
+      status: 'driver_declined',
+      message: 'Driver unavailable, finding another driver...',
+    };
+    this.wsGateway.sendStatusToRider(pendingRequest.riderId, declinedStatus);
+
     // Try next driver
     await this.tryNextDriver(requestId);
   }
@@ -234,10 +263,20 @@ export class RidesService {
       return;
     }
 
-    this.logger.log(`Driver ${pendingRequest.currentDriver.driverId} timed out for request ${requestId}`);
+    this.logger.log(
+      `Driver ${pendingRequest.currentDriver.driverId} timed out for request ${requestId}`
+    );
 
     pendingRequest.declinedDrivers.push(pendingRequest.currentDriver.driverId);
     pendingRequest.currentDriver = null;
+
+    // Notify rider that we're searching for another driver
+    const searchingStatus: RiderStatusMessage = {
+      type: 'rider.status',
+      requestId,
+      status: 'matching',
+    };
+    this.wsGateway.sendStatusToRider(pendingRequest.riderId, searchingStatus);
 
     // Try next driver
     await this.tryNextDriver(requestId);
@@ -254,10 +293,16 @@ export class RidesService {
 
     const nextCandidate = await this.matchingService.getNextCandidate(
       {
-        origin: { lon: pendingRequest.origin.lon, lat: pendingRequest.origin.lat },
-        destination: { lon: pendingRequest.destination.lon, lat: pendingRequest.destination.lat },
+        origin: {
+          lon: pendingRequest.origin.lon,
+          lat: pendingRequest.origin.lat,
+        },
+        destination: {
+          lon: pendingRequest.destination.lon,
+          lat: pendingRequest.destination.lat,
+        },
       },
-      pendingRequest.declinedDrivers,
+      pendingRequest.declinedDrivers
     );
 
     if (!nextCandidate) {
@@ -309,7 +354,9 @@ export class RidesService {
     }
 
     if (rideRequest.status === RideRequestStatus.MATCHED) {
-      throw new BadRequestException('Cannot cancel a matched request. Cancel the trip instead.');
+      throw new BadRequestException(
+        'Cannot cancel a matched request. Cancel the trip instead.'
+      );
     }
 
     // Clear pending request
@@ -358,4 +405,3 @@ export class RidesService {
     });
   }
 }
-

@@ -1,27 +1,32 @@
 import { Injectable, signal } from '@angular/core';
 import { io, Socket } from 'socket.io-client';
-import { Observable, Subject } from 'rxjs';
+import { ReplaySubject, Subject } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { AuthService } from './auth.service';
 
 export interface RideOffer {
-  rideRequestId: string;
-  riderId: string;
-  pickupLat: number;
-  pickupLon: number;
-  dropoffLat: number;
-  dropoffLon: number;
-  estimatedDistance: number;
-  estimatedDuration: number;
-  expiresAt: string;
+  type: 'driver.offer';
+  requestId: string;
+  origin: { lat: number; lon: number };
+  destination: { lat: number; lon: number };
+  pickupEtaSec: number;
+  tripEtaSec: number;
 }
 
-export interface RideAccepted {
-  tripId: string;
-  driverId: string;
-  driverName?: string;
-  vehiclePlate?: string;
-  eta: number;
+export interface RiderStatus {
+  type: 'rider.status';
+  requestId: string;
+  status:
+    | 'matching'
+    | 'matched'
+    | 'no_drivers'
+    | 'driver_declined'
+    | 'trip_started'
+    | 'trip_completed';
+  tripId?: string;
+  driverId?: string;
+  pickupEtaSec?: number;
+  message?: string;
 }
 
 export interface LocationUpdate {
@@ -39,16 +44,16 @@ export class WebSocketService {
   private readonly _connected = signal(false);
   readonly connected = this._connected.asReadonly();
 
-  // Event subjects
-  private rideOfferSubject = new Subject<RideOffer>();
-  private rideAcceptedSubject = new Subject<RideAccepted>();
+  // Event subjects - using ReplaySubject(1) to ensure late subscribers get the last value
+  private rideOfferSubject = new ReplaySubject<RideOffer>(1);
+  private riderStatusSubject = new ReplaySubject<RiderStatus>(1);
   private rideCancelledSubject = new Subject<{ rideRequestId: string }>();
   private locationUpdateSubject = new Subject<LocationUpdate>();
   private tripUpdateSubject = new Subject<any>();
 
   // Observables
   readonly rideOffer$ = this.rideOfferSubject.asObservable();
-  readonly rideAccepted$ = this.rideAcceptedSubject.asObservable();
+  readonly riderStatus$ = this.riderStatusSubject.asObservable();
   readonly rideCancelled$ = this.rideCancelledSubject.asObservable();
   readonly locationUpdate$ = this.locationUpdateSubject.asObservable();
   readonly tripUpdate$ = this.tripUpdateSubject.asObservable();
@@ -79,32 +84,36 @@ export class WebSocketService {
       this._connected.set(false);
     });
 
-    this.socket.on('error', (error) => {
+    this.socket.on('error', (error: { message?: string }) => {
       console.error('WebSocket error:', error);
+      // Logout user if authentication failed
+      if (error?.message === 'Authentication failed') {
+        this.disconnect();
+        this.authService.logout();
+      }
     });
 
-    // Listen for events
-    this.socket.on('ride:offer', (data: RideOffer) => {
-      console.log('Received ride offer:', data);
+    // Listen for events from backend
+    // Driver receives ride offers
+    this.socket.on('driver.offer', (data: RideOffer) => {
       this.rideOfferSubject.next(data);
     });
 
-    this.socket.on('ride:accepted', (data: RideAccepted) => {
-      console.log('Ride accepted:', data);
-      this.rideAcceptedSubject.next(data);
+    // Rider receives status updates
+    this.socket.on('rider.status', (data: RiderStatus) => {
+      this.riderStatusSubject.next(data);
     });
 
     this.socket.on('ride:cancelled', (data: { rideRequestId: string }) => {
-      console.log('Ride cancelled:', data);
       this.rideCancelledSubject.next(data);
     });
 
-    this.socket.on('location:update', (data: LocationUpdate) => {
+    // Location updates broadcast to riders
+    this.socket.on('driver.location', (data: LocationUpdate) => {
       this.locationUpdateSubject.next(data);
     });
 
     this.socket.on('trip:update', (data: any) => {
-      console.log('Trip update:', data);
       this.tripUpdateSubject.next(data);
     });
   }
