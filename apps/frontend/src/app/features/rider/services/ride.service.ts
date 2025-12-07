@@ -3,11 +3,14 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 
+export interface Coordinates {
+  lat: number;
+  lon: number;
+}
+
 export interface RideRequest {
-  pickupLat: number;
-  pickupLon: number;
-  dropoffLat: number;
-  dropoffLon: number;
+  origin: Coordinates;
+  destination: Coordinates;
 }
 
 export interface RideResponse {

@@ -51,14 +51,20 @@ export class DriverService {
   }
 
   startTrip(tripId: string): Observable<Trip> {
-    return this.http.patch<Trip>(`${environment.apiUrl}/trips/${tripId}/start`, {});
+    return this.http.patch<Trip>(`${environment.apiUrl}/trips/${tripId}/state`, {
+      state: 'IN_PROGRESS',
+    });
   }
 
   completeTrip(tripId: string): Observable<Trip> {
-    return this.http.patch<Trip>(`${environment.apiUrl}/trips/${tripId}/complete`, {});
+    return this.http.patch<Trip>(`${environment.apiUrl}/trips/${tripId}/state`, {
+      state: 'COMPLETED',
+    });
   }
 
   arriveAtPickup(tripId: string): Observable<Trip> {
-    return this.http.patch<Trip>(`${environment.apiUrl}/trips/${tripId}/arrive`, {});
+    return this.http.patch<Trip>(`${environment.apiUrl}/trips/${tripId}/state`, {
+      state: 'ARRIVED',
+    });
   }
 }

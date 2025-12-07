@@ -223,8 +223,10 @@ export class RegisterComponent {
       password: this.password,
       role: this.role,
       ...(this.role === 'DRIVER' && {
-        vehiclePlate: this.vehiclePlate,
-        vehicleModel: this.vehicleModel,
+        vehicleInfo: {
+          plate: this.vehiclePlate,
+          model: this.vehicleModel,
+        },
       }),
     };
 

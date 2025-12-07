@@ -27,8 +27,12 @@ export interface RegisterDto {
   email: string;
   password: string;
   role: 'RIDER' | 'DRIVER';
-  vehiclePlate?: string;
-  vehicleModel?: string;
+  vehicleInfo?: {
+    plate?: string;
+    model?: string;
+    make?: string;
+    color?: string;
+  };
 }
 
 @Injectable({

@@ -8,7 +8,7 @@ services:
       WS_PORT: 3001
       JWT_SECRET: dev_secret
       REDIS_URL: redis://redis:6379
-      OSRM_URL: http://osrm:5050
+      OSRM_URL: http://osrm:5000
       DATABASE_URL: postgres://user:pass@postgres:5432/ride
     ports:
       - '3000:3000'

@@ -8,6 +8,8 @@ import {
   Output,
   EventEmitter,
   signal,
+  OnChanges,
+  SimpleChanges,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import * as L from 'leaflet';
@@ -29,16 +31,28 @@ export interface MapClickEvent {
   selector: 'app-map',
   standalone: true,
   imports: [CommonModule],
-  template: ` <div #mapContainer class="w-full h-full rounded-xl overflow-hidden"></div> `,
+  template: `
+    <div
+      #mapContainer
+      class="w-full h-full rounded-xl overflow-hidden"
+      [class.cursor-crosshair]="clickable"
+    ></div>
+  `,
   styles: `
     :host {
       display: block;
       width: 100%;
       height: 100%;
     }
+    .cursor-crosshair {
+      cursor: crosshair !important;
+    }
+    .cursor-crosshair * {
+      cursor: crosshair !important;
+    }
   `,
 })
-export class MapComponent implements AfterViewInit, OnDestroy {
+export class MapComponent implements AfterViewInit, OnDestroy, OnChanges {
   @ViewChild('mapContainer') mapContainer!: ElementRef;
 
   @Input() center: [number, number] = [-1.9403, 29.8739]; // Kigali default
@@ -50,6 +64,7 @@ export class MapComponent implements AfterViewInit, OnDestroy {
   private map!: L.Map;
   private markers = new Map<string, L.Marker>();
   private routeLayer: L.Polyline | null = null;
+  private clickHandler: ((e: L.LeafletMouseEvent) => void) | null = null;
 
   // Custom icons
   private icons = {
@@ -98,6 +113,13 @@ export class MapComponent implements AfterViewInit, OnDestroy {
 
   ngAfterViewInit(): void {
     this.initMap();
+    this.updateClickHandler();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['clickable'] && this.map) {
+      this.updateClickHandler();
+    }
   }
 
   ngOnDestroy(): void {
@@ -113,19 +135,29 @@ export class MapComponent implements AfterViewInit, OnDestroy {
       zoomControl: false,
     });
 
-    // Dark theme tiles
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    // Voyager tiles (better visibility with dark UI)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
       attribution: '&copy; OpenStreetMap &copy; CARTO',
       maxZoom: 19,
     }).addTo(this.map);
 
     // Add zoom control to bottom right
     L.control.zoom({ position: 'bottomright' }).addTo(this.map);
+  }
 
+  private updateClickHandler(): void {
+    // Remove existing handler if any
+    if (this.clickHandler) {
+      this.map.off('click', this.clickHandler);
+      this.clickHandler = null;
+    }
+
+    // Add new handler if clickable
     if (this.clickable) {
-      this.map.on('click', (e: L.LeafletMouseEvent) => {
+      this.clickHandler = (e: L.LeafletMouseEvent) => {
         this.mapClick.emit({ lat: e.latlng.lat, lon: e.latlng.lng });
-      });
+      };
+      this.map.on('click', this.clickHandler);
     }
   }
 

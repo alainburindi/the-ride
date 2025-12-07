@@ -124,11 +124,49 @@ type RideState =
         <div class="space-y-3">
           <div class="flex items-center gap-3 p-3 bg-slate-900/50 rounded-xl">
             <div class="w-3 h-3 bg-green-500 rounded-full"></div>
-            <span class="text-slate-400">
+            <span class="text-slate-400 flex-1">
               @if (pickup()) {
               {{ pickup()!.lat.toFixed(4) }}, {{ pickup()!.lon.toFixed(4) }}
               } @else { Select pickup on map }
             </span>
+            <button
+              (click)="useCurrentLocation()"
+              [disabled]="gettingLocation()"
+              class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-sm rounded-lg flex items-center gap-2 transition-colors"
+            >
+              @if (gettingLocation()) {
+              <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                ></circle>
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              } @else {
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
+              } My Location
+            </button>
           </div>
           @if (pickup()) {
           <button
@@ -149,11 +187,49 @@ type RideState =
           </div>
           <div class="flex items-center gap-3 p-3 bg-slate-900/50 rounded-xl">
             <div class="w-3 h-3 bg-red-500 rounded-full"></div>
-            <span class="text-slate-400">
+            <span class="text-slate-400 flex-1">
               @if (dropoff()) {
               {{ dropoff()!.lat.toFixed(4) }}, {{ dropoff()!.lon.toFixed(4) }}
               } @else { Select dropoff on map }
             </span>
+            <button
+              (click)="useCurrentLocation()"
+              [disabled]="gettingLocation()"
+              class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-sm rounded-lg flex items-center gap-2 transition-colors"
+            >
+              @if (gettingLocation()) {
+              <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                ></circle>
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              } @else {
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+                />
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+                />
+              </svg>
+              } My Location
+            </button>
           </div>
           @if (dropoff()) {
           <button
@@ -213,6 +289,7 @@ export class RiderDashboardComponent implements OnInit, OnDestroy {
   pickup = signal<{ lat: number; lon: number } | null>(null);
   dropoff = signal<{ lat: number; lon: number } | null>(null);
   matchedDriver = signal<{ vehiclePlate?: string; eta?: number } | null>(null);
+  gettingLocation = signal(false);
 
   private subscriptions: Subscription[] = [];
 
@@ -290,6 +367,45 @@ export class RiderDashboardComponent implements OnInit, OnDestroy {
     this.state.set('selecting_dropoff');
   }
 
+  async useCurrentLocation(): Promise<void> {
+    this.gettingLocation.set(true);
+    try {
+      const position = await this.mapComponent.getCurrentLocation();
+      const lat = position.coords.latitude;
+      const lon = position.coords.longitude;
+
+      // Set as pickup or dropoff based on current state
+      if (this.state() === 'selecting_pickup') {
+        this.pickup.set({ lat, lon });
+        this.mapComponent.setMarker({
+          id: 'pickup',
+          lat,
+          lon,
+          type: 'pickup',
+          label: 'Pickup',
+        });
+        this.mapComponent.panTo(lat, lon);
+      } else if (this.state() === 'selecting_dropoff') {
+        this.dropoff.set({ lat, lon });
+        this.mapComponent.setMarker({
+          id: 'dropoff',
+          lat,
+          lon,
+          type: 'dropoff',
+          label: 'Dropoff',
+        });
+        this.mapComponent.panTo(lat, lon);
+      }
+    } catch (error) {
+      console.error('Failed to get current location:', error);
+      alert(
+        'Unable to get your location. Please enable location services or select manually on the map.'
+      );
+    } finally {
+      this.gettingLocation.set(false);
+    }
+  }
+
   requestRide(): void {
     const pickup = this.pickup();
     const dropoff = this.dropoff();
@@ -299,10 +415,8 @@ export class RiderDashboardComponent implements OnInit, OnDestroy {
     this.state.set('searching');
 
     const request: RideRequest = {
-      pickupLat: pickup.lat,
-      pickupLon: pickup.lon,
-      dropoffLat: dropoff.lat,
-      dropoffLon: dropoff.lon,
+      origin: { lat: pickup.lat, lon: pickup.lon },
+      destination: { lat: dropoff.lat, lon: dropoff.lon },
     };
 
     this.rideService.requestRide(request).subscribe({
