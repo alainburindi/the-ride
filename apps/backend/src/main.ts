@@ -7,6 +7,11 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // API versioning - global prefix (excludes health for k8s probes)
+  app.setGlobalPrefix('api/v1', {
+    exclude: ['health', 'health/live', 'health/ready'],
+  });
+
   // Enable validation pipes globally
   app.useGlobalPipes(
     new ValidationPipe({
@@ -29,6 +34,7 @@ async function bootstrap() {
       'Ride-sharing backend API with driver matching, trips, and real-time location tracking'
     )
     .setVersion('1.0')
+    .addServer('/api/v1', 'API v1')
     .addBearerAuth(
       {
         type: 'http',
@@ -46,7 +52,7 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document, {
+  SwaggerModule.setup('docs', app, document, {
     swaggerOptions: {
       persistAuthorization: true,
     },
@@ -56,8 +62,8 @@ async function bootstrap() {
   const port = configService.get<number>('PORT', 3000);
 
   await app.listen(port);
-  console.log(`🚀 REST API running on http://localhost:${port}`);
-  console.log(`📚 API docs available at http://localhost:${port}/api/docs`);
+  console.log(`🚀 REST API running on http://localhost:${port}/api/v1`);
+  console.log(`📚 API docs available at http://localhost:${port}/docs`);
 }
 
 bootstrap();
