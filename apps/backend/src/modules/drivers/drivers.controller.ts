@@ -7,6 +7,12 @@ import {
   UseGuards,
   Query,
 } from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiResponse,
+} from '@nestjs/swagger';
 import { DriversService } from './drivers.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -17,6 +23,8 @@ import { UpdateDriverStatusDto } from './dto/update-driver-status.dto';
 import { ApproveDriverDto } from './dto/approve-driver.dto';
 import { UserRole, DriverApprovalStatus } from '@prisma/client';
 
+@ApiTags('drivers')
+@ApiBearerAuth('JWT')
 @Controller('drivers')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class DriversController {

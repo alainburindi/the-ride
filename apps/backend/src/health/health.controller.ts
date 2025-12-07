@@ -1,8 +1,10 @@
 import { Controller, Get } from '@nestjs/common';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { SkipThrottle } from '@nestjs/throttler';
 import { OsrmService } from '../common/osrm/osrm.service';
 import { RedisService } from '../common/redis/redis.service';
 
+@ApiTags('health')
 @Controller('health')
 @SkipThrottle()
 export class HealthController {

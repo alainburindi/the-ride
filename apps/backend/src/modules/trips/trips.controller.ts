@@ -1,17 +1,22 @@
 import {
   Controller,
   Get,
-  Post,
   Patch,
   Param,
   Body,
   UseGuards,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { TripsService } from './trips.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CurrentUser, CurrentUserData } from '../auth/decorators/current-user.decorator';
+import {
+  CurrentUser,
+  CurrentUserData,
+} from '../auth/decorators/current-user.decorator';
 import { UpdateTripStateDto } from './dto/update-trip-state.dto';
 
+@ApiTags('trips')
+@ApiBearerAuth('JWT')
 @Controller('trips')
 @UseGuards(JwtAuthGuard)
 export class TripsController {
