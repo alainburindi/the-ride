@@ -1,8 +1,16 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { LocationsService } from '../locations/locations.service';
-import { DriversService } from '../drivers/drivers.service';
-import { OsrmService, Coordinates, RouteResult } from '../../common/osrm/osrm.service';
+import {
+  OsrmService,
+  Coordinates,
+  RouteResult,
+} from '../../common/osrm/osrm.service';
 import { RedisService, GeoMember } from '../../common/redis/redis.service';
+import { PrismaService } from '../../common/prisma/prisma.service';
 import { DriverStatus } from '@prisma/client';
 
 export interface MatchCandidate {
@@ -41,9 +49,9 @@ export class MatchingService {
 
   constructor(
     private readonly locationsService: LocationsService,
-    private readonly driversService: DriversService,
+    private readonly prisma: PrismaService,
     private readonly osrmService: OsrmService,
-    private readonly redis: RedisService,
+    private readonly redis: RedisService
   ) {}
 
   /**
@@ -60,7 +68,7 @@ export class MatchingService {
     } = request;
 
     this.logger.debug(
-      `Finding matches: origin=${origin.lat},${origin.lon}, radius=${radiusMeters}m`,
+      `Finding matches: origin=${origin.lat},${origin.lon}, radius=${radiusMeters}m`
     );
 
     // Step 1: Get nearby drivers from Redis GEO
@@ -68,7 +76,7 @@ export class MatchingService {
       origin.lat,
       origin.lon,
       radiusMeters,
-      maxCandidates * 2, // Get more candidates to filter
+      maxCandidates * 2 // Get more candidates to filter
     );
 
     if (nearbyDrivers.length === 0) {
@@ -91,12 +99,12 @@ export class MatchingService {
       availableDrivers,
       origin,
       destination,
-      maxCandidates,
+      maxCandidates
     );
 
     const elapsed = Date.now() - startTime;
     this.logger.debug(
-      `Matching completed in ${elapsed}ms, found ${candidates.length} candidates`,
+      `Matching completed in ${elapsed}ms, found ${candidates.length} candidates`
     );
 
     return {
@@ -129,12 +137,12 @@ export class MatchingService {
    */
   async getNextCandidate(
     request: MatchRequest,
-    excludeDriverIds: string[],
+    excludeDriverIds: string[]
   ): Promise<MatchCandidate | null> {
     const result = await this.findMatches(request);
 
     const availableCandidates = result.candidates.filter(
-      (c) => !excludeDriverIds.includes(c.driverId),
+      (c) => !excludeDriverIds.includes(c.driverId)
     );
 
     return availableCandidates.length > 0 ? availableCandidates[0] : null;
@@ -142,25 +150,29 @@ export class MatchingService {
 
   /**
    * Filter drivers to only include those with ONLINE status
+   * Uses a single batch query instead of N+1 sequential queries
    */
   private async filterAvailableDrivers(
-    drivers: GeoMember[],
+    drivers: GeoMember[]
   ): Promise<GeoMember[]> {
-    const availableDrivers: GeoMember[] = [];
-
-    for (const driver of drivers) {
-      try {
-        const driverInfo = await this.driversService.findOne(driver.memberId);
-        if (driverInfo.status === DriverStatus.ONLINE) {
-          availableDrivers.push(driver);
-        }
-      } catch {
-        // Driver not found in DB, skip
-        continue;
-      }
+    if (drivers.length === 0) {
+      return [];
     }
 
-    return availableDrivers;
+    const driverIds = drivers.map((d) => d.memberId);
+
+    // Single batch query to get all online drivers
+    const onlineDrivers = await this.prisma.driver.findMany({
+      where: {
+        id: { in: driverIds },
+        status: DriverStatus.ONLINE,
+      },
+      select: { id: true },
+    });
+
+    const onlineDriverIds = new Set(onlineDrivers.map((d) => d.id));
+
+    return drivers.filter((d) => onlineDriverIds.has(d.memberId));
   }
 
   /**
@@ -170,7 +182,7 @@ export class MatchingService {
     drivers: GeoMember[],
     origin: Coordinates,
     destination: Coordinates,
-    maxCandidates: number,
+    maxCandidates: number
   ): Promise<MatchCandidate[]> {
     const candidates: MatchCandidate[] = [];
 
@@ -185,7 +197,7 @@ export class MatchingService {
         const { pickup, trip } = await this.osrmService.getFullRouteEta(
           driverLocation,
           origin,
-          destination,
+          destination
         );
 
         // Calculate score (lower is better)
@@ -206,7 +218,7 @@ export class MatchingService {
           throw error; // Re-throw OSRM unavailable errors
         }
         this.logger.warn(
-          `Failed to calculate ETA for driver ${driver.memberId}: ${error}`,
+          `Failed to calculate ETA for driver ${driver.memberId}: ${error}`
         );
         return null;
       }
@@ -228,4 +240,3 @@ export class MatchingService {
     return candidates.slice(0, maxCandidates);
   }
 }
-
